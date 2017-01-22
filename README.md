@@ -1,4 +1,4 @@
-# Lumbergh - A supervisor for multi-process applications
+# Lumbergh - a supervisor for multi-process applications
 
 ## Overview
 
