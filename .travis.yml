@@ -13,4 +13,12 @@ matrix:
     allow_failures:
         - rust: nightly
 
-cache: cargo
+cache:
+    directories:
+        - target
+        - merkle/target
+        - $HOME/.cargo
+
+script:
+    - rustc --version && cargo --version
+    - ./ci/test_with_crates.sh
