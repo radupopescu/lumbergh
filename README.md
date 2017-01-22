@@ -1,5 +1,7 @@
 # Lumbergh - a supervisor for multi-process applications
 
+[![Build Status](https://travis-ci.org/radupopescu/lumbergh.svg?branch=master)](https://travis-ci.org/radupopescu/lumbergh)
+
 ## Overview
 
 Lumbergh is a library that implements supervisors for multi-process applications. It is modelled after the Erlang process supervisors from the Open Telecom Platform (OTP).
