@@ -1,8 +1,8 @@
 [package]
 name = "lumbergh"
-version = "0.1.0"
+version = "0.0.1"
 authors = ["Radu Popescu <mail@radupopescu.net>"]
 
 [dependencies]
-libc = "^0.2.20"
+libc = { git = "https://github.com/radupopescu/libc.git", branch = "master" }
 errno = "^0.2.1"
