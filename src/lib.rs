@@ -1,3 +1,7 @@
+#![recursion_limit = "1024"]
+
+#[macro_use]
+extern crate error_chain;
 extern crate errno;
 extern crate libc;
 
@@ -7,19 +11,23 @@ use libc::{fork, waitpid, sigwait, pthread_sigmask, sigemptyset, sigfillset, sig
 use libc::{c_int, sigaction};
 use libc::{SIG_BLOCK, SIGCHLD};
 
+use errors::*;
+
+pub mod errors;
+
 /// Runs the supervisor for the given child tasks
-pub fn run_supervisor<F>(child_fun: F)
-    where F: FnOnce()
+pub fn run_supervisor<F>(child_fun: F) -> Result<()>
+    where F: FnOnce() -> Result<()>
 {
     init_supervisor();
 
     match unsafe { fork() as i32 } {
         -1 => {
-            println!("Could not fork child process. Error: {}", errno());
+            Err(ErrorKind::ForkError(errno()).into())
         }
         0 => child_fun(),
         pid if pid > 0 => supervise(pid),
-        _ => panic!("Shouldn't happen. Exiting."),
+        _ => Err("Shouldn't happen. Exiting.".into()),
     }
 }
 
@@ -36,7 +44,7 @@ fn init_supervisor() {
     mask_all_signals();
 }
 
-fn supervise(child_pid: i32) {
+fn supervise(child_pid: i32) -> Result<()> {
     println!("Hey, {}. What's happening?", child_pid);
 
     let mut signop: i32 = 0;
@@ -44,7 +52,7 @@ fn supervise(child_pid: i32) {
         let mut sigchld_set: sigset_t = std::mem::uninitialized();
         sigemptyset(&mut sigchld_set);
         sigaddset(&mut sigchld_set, SIGCHLD);
-        sigwait(&mut sigchld_set, &mut signop)
+        sigwait(&sigchld_set, &mut signop)
     };
 
     println!("Waitret: {}, Signop: {}", wait_ret, signop);
@@ -54,6 +62,8 @@ fn supervise(child_pid: i32) {
     let ret = unsafe { waitpid(child_pid, &mut stat_val, 0) };
     println!("{} returned.", ret);
     util::print_exit_status(stat_val);
+
+    Ok(())
 }
 
 fn mask_all_signals() -> i32 {
