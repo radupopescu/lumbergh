@@ -27,7 +27,7 @@ pub fn run_supervisor<F>(child_fun: F) -> Result<()>
         }
         0 => child_fun(),
         pid if pid > 0 => supervise(pid),
-        _ => Err("Shouldn't happen. Exiting.".into()),
+        _ => bail!("Shouldn't happen. Exiting."),
     }
 }
 
