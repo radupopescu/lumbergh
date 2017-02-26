@@ -2,14 +2,14 @@
 
 #[macro_use]
 extern crate error_chain;
-extern crate errno;
 extern crate libc;
+extern crate nix;
 
-use errno::errno;
-use libc::{fork, waitpid, sigwait, pthread_sigmask, sigemptyset, sigfillset, sigaddset, sigset_t};
+use libc::{waitpid, sigwait, pthread_sigmask, sigemptyset, sigfillset, sigaddset, sigset_t};
 #[cfg(not(target_os="linux"))]
 use libc::{c_int, sigaction};
 use libc::{SIG_BLOCK, SIGCHLD};
+use nix::unistd::{fork,ForkResult};
 
 use errors::*;
 
@@ -21,13 +21,11 @@ pub fn run_supervisor<F>(child_fun: F) -> Result<()>
 {
     init_supervisor().chain_err(|| ErrorKind::SupervisorInitError)?;
 
-    match unsafe { fork() as i32 } {
-        -1 => {
-            Err(ErrorKind::ForkError(errno()).into())
-        }
-        0 => child_fun(),
-        pid if pid > 0 => supervise(pid),
-        _ => bail!("Shouldn't happen. Exiting."),
+    match fork() {
+        Err(nix::Error::Sys(errno)) => Err(ErrorKind::ForkError(errno).into()),
+        Ok(ForkResult::Child) => child_fun(),
+        Ok(ForkResult::Parent { child }) => supervise(child),
+        _ => bail!("This should not happen!"),
     }
 }
 

@@ -1,4 +1,4 @@
-use errno::Errno;
+use nix;
 
 error_chain! {
     types {}
@@ -8,7 +8,7 @@ error_chain! {
     foreign_links {}
 
     errors {
-        ForkError(error_num: Errno) {
+        ForkError(error_num: nix::Errno) {
             description("Couldn't fork child process.")
             display("Couldn't fork child process. Errno: {}", error_num)
         }

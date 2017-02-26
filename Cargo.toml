@@ -6,4 +6,4 @@ authors = ["Radu Popescu <mail@radupopescu.net>"]
 [dependencies]
 error-chain = "^0.9.0"
 libc = { git = "https://github.com/rust-lang/libc.git", branch = "master" }
-errno = "^0.2.1"
+nix = "^0.7.0"
