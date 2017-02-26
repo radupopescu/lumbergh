@@ -19,7 +19,7 @@ pub mod errors;
 pub fn run_supervisor<F>(child_fun: F) -> Result<()>
     where F: FnOnce() -> Result<()>
 {
-    init_supervisor();
+    init_supervisor().chain_err(|| ErrorKind::SupervisorInitError)?;
 
     match unsafe { fork() as i32 } {
         -1 => {
@@ -31,17 +31,23 @@ pub fn run_supervisor<F>(child_fun: F) -> Result<()>
     }
 }
 
-fn init_supervisor() {
+fn init_supervisor() -> Result<()> {
     #[cfg(not(target_os="linux"))]
     unsafe {
         let mut act: sigaction = std::mem::uninitialized();
-        sigemptyset(&mut act.sa_mask);
+        if sigemptyset(&mut act.sa_mask) == -1 {
+            return Err(ErrorKind::SignalAPIError("sigemptyset".to_owned(), -1).into());
+        }
         act.sa_sigaction = std::mem::transmute(&null_handler);
         act.sa_flags = 0;
-        sigaction(SIGCHLD, &act, 0 as *mut sigaction);
+        if sigaction(SIGCHLD, &act, 0 as *mut sigaction) == -1 {
+            return Err(ErrorKind::SignalAPIError("sigaction".to_owned(), -1).into());
+        }
     }
 
-    mask_all_signals();
+    mask_all_signals().chain_err(|| "Could not mask signals")?;
+
+    Ok(())
 }
 
 fn supervise(child_pid: i32) -> Result<()> {
@@ -50,10 +56,18 @@ fn supervise(child_pid: i32) -> Result<()> {
     let mut signop: i32 = 0;
     let wait_ret = unsafe {
         let mut sigchld_set: sigset_t = std::mem::uninitialized();
-        sigemptyset(&mut sigchld_set);
-        sigaddset(&mut sigchld_set, SIGCHLD);
+        if sigemptyset(&mut sigchld_set) == -1 {
+            return Err(ErrorKind::SignalAPIError("sigemptyset".to_owned(), -1).into());
+        }
+        if sigaddset(&mut sigchld_set, SIGCHLD) == -1 {
+            return Err(ErrorKind::SignalAPIError("sigaddset".to_owned(), -1).into());
+        }
         sigwait(&sigchld_set, &mut signop)
     };
+
+    if wait_ret != 0 {
+        return Err(ErrorKind::SignalAPIError("sigwait".to_owned(), wait_ret).into());
+    }
 
     println!("Waitret: {}, Signop: {}", wait_ret, signop);
 
@@ -66,11 +80,17 @@ fn supervise(child_pid: i32) -> Result<()> {
     Ok(())
 }
 
-fn mask_all_signals() -> i32 {
+fn mask_all_signals() -> Result<()> {
     unsafe {
         let mut signal_mask: sigset_t = std::mem::uninitialized();
-        sigfillset(&mut signal_mask);
-        pthread_sigmask(SIG_BLOCK, &signal_mask, 0 as *mut sigset_t)
+        if sigfillset(&mut signal_mask) == -1 {
+            return Err(ErrorKind::SignalAPIError("sigfillset".to_owned(), -1).into());
+        }
+        let ret = pthread_sigmask(SIG_BLOCK, &signal_mask, 0 as *mut sigset_t);
+        if ret != 0 {
+            return Err(ErrorKind::SignalAPIError("pthread_sigmask".to_owned(), ret).into());
+        }
+        Ok(())
     }
 }
 
