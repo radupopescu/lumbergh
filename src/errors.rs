@@ -5,17 +5,11 @@ error_chain! {
 
     links {}
 
-    foreign_links {}
+    foreign_links {
+        NixError(nix::Error) #[doc="nix error"];
+    }
 
     errors {
-        ForkError(error_num: nix::Errno) {
-            description("Couldn't fork child process.")
-            display("Couldn't fork child process. Errno: {}", error_num)
-        }
-        SignalAPIError(function_name: String, error_num: i32) {
-            description("Signal API function error.")
-            display("Signal API function error: {} returned {}", function_name, error_num)
-        }
         SupervisorInitError {
             description("Could not initialize supervisor")
             display("Could not initialize supervisor")
