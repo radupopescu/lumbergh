@@ -6,3 +6,7 @@ authors = ["Radu Popescu <mail@radupopescu.net>"]
 [dependencies]
 error-chain = "^0.10.0"
 nix = "^0.7.0"
+log = "^0.3.7"
+
+[dev-dependencies]
+env_logger = "^0.4.2"

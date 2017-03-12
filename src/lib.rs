@@ -2,6 +2,8 @@
 
 #[macro_use]
 extern crate error_chain;
+#[macro_use]
+extern crate log;
 extern crate nix;
 
 #[cfg(not(target_os="linux"))]
@@ -44,7 +46,7 @@ fn init_supervisor() -> Result<()> {
 }
 
 fn supervise(child_pid: i32) -> Result<()> {
-    println!("Hey, {}. What's happening?", child_pid);
+    info!("Hey, {}. What's happening?", child_pid);
 
     let mut sigchld = SigSet::empty();
     sigchld.add(Signal::SIGCHLD);
@@ -52,7 +54,7 @@ fn supervise(child_pid: i32) -> Result<()> {
 
     // Wait for a child to finish.
     let status = waitpid(child_pid, None)?;
-    println!("Status: {:?}", status);
+    info!("Status: {:?}", status);
 
     Ok(())
 }
