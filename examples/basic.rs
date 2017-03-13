@@ -6,7 +6,7 @@ extern crate log;
 
 use std::{thread, time};
 
-use lumbergh::run_supervisor;
+use lumbergh::supervisor::Supervisor;
 use lumbergh::errors::*;
 
 fn run_child(pid: i32) -> Result<()> {
@@ -17,7 +17,8 @@ fn run_child(pid: i32) -> Result<()> {
 }
 
 fn run() -> Result<()> {
-    run_supervisor(move || run_child(0))
+    let supervisor = Supervisor::new();
+    supervisor.run(move || run_child(0))
 }
 
 fn main() {
