@@ -4,21 +4,39 @@ extern crate env_logger;
 #[macro_use]
 extern crate log;
 
+use std::rc::Rc;
 use std::{thread, time};
 
-use lumbergh::supervisor::Supervisor;
+use lumbergh::supervisor::{Worker, WorkerLifetime, ShutdownType, Strategy, Supervisor,
+                           SupervisorFlags, ChildSpecs, ProcessType};
 use lumbergh::errors::*;
 
-fn run_child(pid: i32) -> Result<()> {
-    thread::sleep(time::Duration::from_secs(1));
-    info!("Hello, Lumbergh. This is {}", pid);
+struct SimpleChild {
+    pid: i32,
+}
 
-    Ok(())
+impl Worker for SimpleChild {
+    fn init(&self) -> Result<()> {
+        thread::sleep(time::Duration::from_secs(1));
+        info!("Hello, Lumbergh. This is {}", self.pid);
+        Ok(())
+    }
+    fn finalize(&self) -> Result<()> {
+        Ok(())
+    }
 }
 
 fn run() -> Result<()> {
-    let supervisor = Supervisor::new();
-    supervisor.run(move || run_child(0))
+    if let Some(flags) = SupervisorFlags::new(Strategy::OneForOne, 1, 5) {
+        let child_specs = [ChildSpecs::new("simple",
+                                           Rc::new(SimpleChild { pid: 0 }),
+                                           WorkerLifetime::Permanent,
+                                           ShutdownType::Timeout(1),
+                                           ProcessType::Worker)];
+        let supervisor = Supervisor::new(flags, &child_specs);
+        supervisor.run();
+    };
+    Ok(())
 }
 
 fn main() {

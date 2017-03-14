@@ -1,3 +1,5 @@
+use std::rc::Rc;
+
 #[cfg(not(target_os="linux"))]
 use nix::c_int;
 #[cfg(not(target_os="linux"))]
@@ -15,24 +17,27 @@ pub enum Strategy {
     SimpleOneForOne,
 }
 
+#[derive(Clone)]
 pub enum WorkerLifetime {
     Permanent,
     Temporary,
     Transient,
 }
 
+#[derive(Clone)]
 pub enum ProcessType {
     Worker,
     Supervisor,
 }
 
+#[derive(Clone)]
 pub enum ShutdownType {
     BrutalKill,
     Infinity,
     Timeout(u64),
 }
 
-trait Worker {
+pub trait Worker {
     fn init(&self) -> Result<()>;
     fn finalize(&self) -> Result<()>;
 }
@@ -43,29 +48,66 @@ pub struct SupervisorFlags {
     period: u64,
 }
 
+impl SupervisorFlags {
+    pub fn new(strategy: Strategy, intensity: u64, period: u64) -> Option<SupervisorFlags> {
+        if period > 0 {
+            Some(SupervisorFlags {
+                strategy: strategy,
+                intensity: intensity,
+                period: period,
+            })
+        } else {
+            None
+        }
+    }
+}
+
+#[derive(Clone)]
 pub struct ChildSpecs {
     id: String,
-    worker: Box<Worker>,
+    worker: Rc<Worker>,
     restart: WorkerLifetime,
     shutdown: ShutdownType,
     process_type: ProcessType,
 }
 
-pub struct Supervisor {}
+impl ChildSpecs {
+    pub fn new(id: &str,
+               worker: Rc<Worker>,
+               restart: WorkerLifetime,
+               shutdown: ShutdownType,
+               process_type: ProcessType)
+               -> ChildSpecs {
+        ChildSpecs {
+            id: id.to_owned(),
+            worker: worker,
+            restart: restart,
+            shutdown: shutdown,
+            process_type: process_type,
+        }
+    }
+}
+
+pub struct Supervisor {
+    flags: SupervisorFlags,
+    child_specs: Vec<ChildSpecs>,
+}
 
 impl Supervisor {
-    pub fn new() -> Supervisor {
-        Supervisor {}
+    pub fn new(flags: SupervisorFlags, child_specs: &[ChildSpecs]) -> Supervisor {
+        Supervisor {
+            flags: flags,
+            child_specs: child_specs.to_vec(),
+        }
     }
 
     /// Runs the supervisor for the given child tasks
-    pub fn run<F>(&self, child_fun: F) -> Result<()>
-        where F: FnOnce() -> Result<()>
+    pub fn run(&self) -> Result<()>
     {
         self.init().chain_err(|| ErrorKind::SupervisorInitError)?;
 
         match fork().chain_err(|| "Could not fork process.")? {
-            ForkResult::Child => child_fun(),
+            ForkResult::Child => self.child_specs[0].worker.init(),
             ForkResult::Parent { child } => self.supervise(child),
         }
     }
