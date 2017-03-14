@@ -7,7 +7,7 @@ extern crate log;
 use std::rc::Rc;
 use std::{thread, time};
 
-use lumbergh::supervisor::{Worker, WorkerLifetime, ShutdownType, Strategy, Supervisor,
+use lumbergh::supervisor::{Supervisable, WorkerLifetime, ShutdownType, Strategy, Supervisor,
                            SupervisorFlags, ChildSpecs, ProcessType};
 use lumbergh::errors::*;
 
@@ -15,7 +15,7 @@ struct SimpleChild {
     pid: i32,
 }
 
-impl Worker for SimpleChild {
+impl Supervisable for SimpleChild {
     fn init(&self) -> Result<()> {
         thread::sleep(time::Duration::from_secs(1));
         info!("Hello, Lumbergh. This is {}", self.pid);

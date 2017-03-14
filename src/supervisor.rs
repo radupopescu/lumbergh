@@ -37,7 +37,7 @@ pub enum ShutdownType {
     Timeout(u64),
 }
 
-pub trait Worker {
+pub trait Supervisable {
     fn init(&self) -> Result<()>;
     fn finalize(&self) -> Result<()>;
 }
@@ -65,7 +65,7 @@ impl SupervisorFlags {
 #[derive(Clone)]
 pub struct ChildSpecs {
     id: String,
-    worker: Rc<Worker>,
+    worker: Rc<Supervisable>,
     restart: WorkerLifetime,
     shutdown: ShutdownType,
     process_type: ProcessType,
@@ -73,7 +73,7 @@ pub struct ChildSpecs {
 
 impl ChildSpecs {
     pub fn new(id: &str,
-               worker: Rc<Worker>,
+               worker: Rc<Supervisable>,
                restart: WorkerLifetime,
                shutdown: ShutdownType,
                process_type: ProcessType)
