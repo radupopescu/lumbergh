@@ -1,11 +1,12 @@
 use std::rc::Rc;
+use std::vec::Vec;
 
 #[cfg(not(target_os="linux"))]
 use nix::c_int;
 #[cfg(not(target_os="linux"))]
 use nix::sys::signal::{SaFlags, SigHandler, SigAction, sigaction};
 use nix::sys::signal::{SigSet, Signal};
-use nix::sys::wait::waitpid;
+use nix::sys::wait::{wait, WaitStatus};
 use nix::unistd::{fork, ForkResult};
 
 use errors::*;
@@ -102,14 +103,21 @@ impl Supervisor {
     }
 
     /// Runs the supervisor for the given child tasks
-    pub fn run(&self) -> Result<()>
-    {
+    pub fn run(&self) -> Result<()> {
+        info!("Supervisor start");
         self.init().chain_err(|| ErrorKind::SupervisorInitError)?;
-
-        match fork().chain_err(|| "Could not fork process.")? {
-            ForkResult::Child => self.child_specs[0].worker.init(),
-            ForkResult::Parent { child } => self.supervise(child),
+        for idx in 0..self.child_specs.len() {
+            info!("Supervisor spawning child: {}", self.child_specs[idx].id);
+            match fork().chain_err(|| "Could not fork process.")? {
+                ForkResult::Child => {
+                    self.child_specs[idx].worker.init()?;
+                    return Ok(());
+                }
+                ForkResult::Parent { child: _ } => {}
+            }
         }
+        self.supervise()?;
+        Ok(())
     }
 
     fn init(&self) -> Result<()> {
@@ -123,23 +131,25 @@ impl Supervisor {
                 sigaction(Signal::SIGCHLD, &action)?;
             }
         }
-
         self.mask_all_signals()?;
-
         Ok(())
     }
 
-    fn supervise(&self, child_pid: i32) -> Result<()> {
-        info!("Hey, {}. What's happening?", child_pid);
-
-        let mut sigchld = SigSet::empty();
-        sigchld.add(Signal::SIGCHLD);
-        sigchld.wait()?;
-
-        // Wait for a child to finish.
-        let status = waitpid(child_pid, None)?;
-        info!("Status: {:?}", status);
-
+    fn supervise(&self) -> Result<()> {
+        let mut active_kids = self.child_specs.len();
+        while active_kids > 0 {
+            info!("Supervisor waiting for child processes. {} remaining.",
+                  active_kids);
+            match wait()? {
+                WaitStatus::Exited(pid, ret) => {
+                    info!("Status: {} exited with code {}", pid, ret);
+                }
+                _ => {
+                    warn!("Unknown action");
+                }
+            }
+            active_kids -= 1;
+        }
         Ok(())
     }
 
