@@ -136,6 +136,10 @@ impl Supervisor {
     }
 
     fn supervise(&self) -> Result<()> {
+        let mut sigchld = SigSet::empty();
+        sigchld.add(Signal::SIGCHLD);
+        sigchld.wait()?;
+
         let mut active_kids = self.child_specs.len();
         while active_kids > 0 {
             info!("Supervisor waiting for child processes. {} remaining.",
