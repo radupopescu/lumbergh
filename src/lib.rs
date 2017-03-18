@@ -5,6 +5,7 @@ extern crate error_chain;
 #[macro_use]
 extern crate log;
 extern crate nix;
+extern crate time;
 
 pub mod errors;
 pub mod supervisor;
