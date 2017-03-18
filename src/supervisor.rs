@@ -11,6 +11,11 @@ use nix::unistd::{fork, ForkResult};
 
 use errors::*;
 
+pub trait Supervisable {
+    fn init(&self) -> Result<()>;
+    fn finalize(&self) -> Result<()>;
+}
+
 pub enum Strategy {
     OneForOne,
     OneForAll,
@@ -19,7 +24,7 @@ pub enum Strategy {
 }
 
 #[derive(Clone)]
-pub enum WorkerLifetime {
+pub enum ChildLifetime {
     Permanent,
     Temporary,
     Transient,
@@ -36,11 +41,6 @@ pub enum ShutdownType {
     BrutalKill,
     Infinity,
     Timeout(u64),
-}
-
-pub trait Supervisable {
-    fn init(&self) -> Result<()>;
-    fn finalize(&self) -> Result<()>;
 }
 
 pub struct SupervisorFlags {
@@ -66,22 +66,22 @@ impl SupervisorFlags {
 #[derive(Clone)]
 pub struct ChildSpecs {
     id: String,
-    worker: Rc<Supervisable>,
-    restart: WorkerLifetime,
+    child: Rc<Supervisable>,
+    restart: ChildLifetime,
     shutdown: ShutdownType,
     process_type: ProcessType,
 }
 
 impl ChildSpecs {
     pub fn new(id: &str,
-               worker: Rc<Supervisable>,
-               restart: WorkerLifetime,
+               child: Rc<Supervisable>,
+               restart: ChildLifetime,
                shutdown: ShutdownType,
                process_type: ProcessType)
                -> ChildSpecs {
         ChildSpecs {
             id: id.to_owned(),
-            worker: worker,
+            child: child,
             restart: restart,
             shutdown: shutdown,
             process_type: process_type,
@@ -110,7 +110,7 @@ impl Supervisor {
             info!("Supervisor spawning child: {}", self.child_specs[idx].id);
             match fork().chain_err(|| "Could not fork process.")? {
                 ForkResult::Child => {
-                    self.child_specs[idx].worker.init()?;
+                    self.child_specs[idx].child.init()?;
                     return Ok(());
                 }
                 ForkResult::Parent { child: _ } => {}

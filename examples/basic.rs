@@ -9,9 +9,9 @@ use std::rc::Rc;
 use std::{thread, time};
 
 use lumbergh::errors::*;
-use lumbergh::supervisor::{WorkerLifetime, ShutdownType, Strategy, Supervisor, SupervisorFlags,
+use lumbergh::supervisor::{ChildLifetime, ShutdownType, Strategy, Supervisor, SupervisorFlags,
                            ChildSpecs, ProcessType};
-use lumbergh::worker::FnWorker;
+use lumbergh::child::FnWorker;
 
 fn make_child_specs(id: u64) -> ChildSpecs {
     ChildSpecs::new(&format!("simple{}", id),
@@ -19,7 +19,7 @@ fn make_child_specs(id: u64) -> ChildSpecs {
                         thread::sleep(time::Duration::from_secs(1));
                         Ok(())
                     })),
-                    WorkerLifetime::Permanent,
+                    ChildLifetime::Permanent,
                     ShutdownType::Timeout(1),
                     ProcessType::Worker)
 }
