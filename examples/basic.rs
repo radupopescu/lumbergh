@@ -8,28 +8,20 @@ extern crate log;
 use std::rc::Rc;
 use std::{thread, time};
 
-use lumbergh::supervisor::{Supervisable, WorkerLifetime, ShutdownType, Strategy, Supervisor,
-                           SupervisorFlags, ChildSpecs, ProcessType};
 use lumbergh::errors::*;
-
-struct SimpleChild {}
+use lumbergh::supervisor::{WorkerLifetime, ShutdownType, Strategy, Supervisor, SupervisorFlags,
+                           ChildSpecs, ProcessType};
+use lumbergh::worker::FnWorker;
 
 fn make_child_specs(id: u64) -> ChildSpecs {
     ChildSpecs::new(&format!("simple{}", id),
-                    Rc::new(SimpleChild {}),
+                    Rc::new(FnWorker::new(|| {
+                        thread::sleep(time::Duration::from_secs(1));
+                        Ok(())
+                    })),
                     WorkerLifetime::Permanent,
                     ShutdownType::Timeout(1),
                     ProcessType::Worker)
-}
-
-impl Supervisable for SimpleChild {
-    fn init(&self) -> Result<()> {
-        thread::sleep(time::Duration::from_secs(1));
-        Ok(())
-    }
-    fn finalize(&self) -> Result<()> {
-        Ok(())
-    }
 }
 
 fn run() -> Result<()> {

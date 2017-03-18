@@ -8,4 +8,5 @@ extern crate nix;
 
 pub mod errors;
 pub mod supervisor;
+pub mod worker;
 
