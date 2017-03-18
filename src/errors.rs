@@ -1,4 +1,5 @@
 use nix;
+use log;
 
 error_chain! {
     types {}
@@ -7,6 +8,7 @@ error_chain! {
 
     foreign_links {
         NixError(nix::Error) #[doc="nix error"];
+        LogError(log::SetLoggerError) #[doc="log error"];
     }
 
     errors {

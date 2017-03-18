@@ -25,31 +25,29 @@ fn make_child_specs(id: u64) -> ChildSpecs {
 }
 
 fn run() -> Result<()> {
+    env_logger::init().chain_err(|| "Could not initialize env_logger")?;
     if let Some(flags) = SupervisorFlags::new(Strategy::OneForOne, 1, 5) {
         let mut child_specs = Vec::new();
         for idx in 0..3 {
             child_specs.push(make_child_specs(idx));
         }
-        let supervisor = Supervisor::new(flags, &child_specs);
-        supervisor.run()?;
+        Supervisor::new(flags, &child_specs).run()?;
     };
     Ok(())
 }
 
 fn main() {
-    if let Ok(_) = env_logger::init() {
-        if let Err(ref e) = run() {
-            error!("error: {}", e);
+    if let Err(ref e) = run() {
+        error!("error: {}", e);
 
-            for e in e.iter().skip(1) {
-                error!("caused by: {}", e);
-            }
-
-            if let Some(backtrace) = e.backtrace() {
-                error!("backtrace: {:?}", backtrace);
-            }
-
-            ::std::process::exit(1)
+        for e in e.iter().skip(1) {
+            error!("caused by: {}", e);
         }
+
+        if let Some(backtrace) = e.backtrace() {
+            error!("backtrace: {:?}", backtrace);
+        }
+
+        ::std::process::exit(1)
     }
 }
