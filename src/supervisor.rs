@@ -4,7 +4,7 @@ use std::vec::Vec;
 #[cfg(not(target_os="linux"))]
 use nix::c_int;
 #[cfg(not(target_os="linux"))]
-use nix::sys::signal::{SaFlags, SigHandler, SigAction, sigaction};
+use nix::sys::signal::{SaFlags, SigAction, SigHandler, sigaction};
 use nix::sys::signal::{SigSet, Signal};
 use nix::sys::wait::{wait, WaitStatus};
 use nix::unistd::{fork, ForkResult};
@@ -131,14 +131,22 @@ impl Supervisor {
                 sigaction(Signal::SIGCHLD, &action)?;
             }
         }
-        self.mask_all_signals()?;
+
+        SigSet::all().thread_set_mask()?;
         Ok(())
     }
 
     fn supervise(&self) -> Result<()> {
-        let mut sigchld = SigSet::empty();
-        sigchld.add(Signal::SIGCHLD);
-        sigchld.wait()?;
+        let mut sigs = SigSet::empty();
+        sigs.add(Signal::SIGCHLD);
+        sigs.add(Signal::SIGINT);
+
+        match sigs.wait()? {
+            Signal::SIGINT => {
+                warn!("SIGINT!!!!!");
+            }
+            _ => {}
+        }
 
         let mut active_kids = self.child_specs.len();
         while active_kids > 0 {
@@ -155,10 +163,6 @@ impl Supervisor {
             active_kids -= 1;
         }
         Ok(())
-    }
-
-    fn mask_all_signals(&self) -> Result<()> {
-        Ok(SigSet::all().thread_set_mask()?)
     }
 }
 
