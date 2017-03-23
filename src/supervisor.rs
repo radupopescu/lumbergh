@@ -1,15 +1,22 @@
-use std::rc::Rc;
-use std::vec::Vec;
 use std::collections::HashMap;
+use std::rc::Rc;
+use std::sync::mpsc;
+use std::thread;
+use std::time::Duration;
+use std::vec::Vec;
 
+
+use futures::Future;
+use futures_cpupool::CpuPool;
 #[cfg(not(target_os="linux"))]
 use nix::c_int;
 #[cfg(not(target_os="linux"))]
 use nix::sys::signal::{SaFlags, SigAction, SigHandler, sigaction};
 use nix::sys::signal::{SigSet, Signal};
-use nix::sys::wait::{WaitStatus, wait};
+use nix::sys::wait::{WaitStatus, waitpid};
 use nix::unistd::{ForkResult, fork};
 use time::PreciseTime;
+use tokio_timer::Timer;
 
 use errors::*;
 
@@ -91,6 +98,7 @@ impl ChildSpecs {
     }
 }
 
+#[derive(Clone)]
 struct ChildRecord {
     spec_index: usize,
     time_started: PreciseTime,
@@ -137,34 +145,64 @@ impl Supervisor {
     }
 
     fn supervise(&mut self) -> Result<()> {
-        let mut sigs = SigSet::empty();
-        sigs.add(Signal::SIGCHLD);
-        sigs.add(Signal::SIGINT);
-
-        match sigs.wait()? {
-            Signal::SIGINT => {
-                warn!("SIGINT!!!!!");
-                // Here, send child processes an exit message
-            }
-            _ => {}
-        }
-
-        let mut active_kids = self.child_specs.len();
-        while active_kids > 0 {
-            info!("Supervisor waiting for child processes. {} remaining.",
-                  active_kids);
-            match wait()? {
-                WaitStatus::Exited(pid, ret) => {
-                    let child_name = &self.child_specs[self.child_records[&pid].spec_index].id;
-                    let life = self.child_records[&pid].time_started.to(PreciseTime::now()).num_seconds();
-                    info!("Status: {} exited after {}s with exit code {}.", child_name, life, ret);
-                    self.child_records.remove(&pid);
-                }
-                _ => {
-                    warn!("Unknown action");
+        thread::spawn(|| {
+            let mut sigs = SigSet::empty();
+            sigs.add(Signal::SIGCHLD);
+            sigs.add(Signal::SIGINT);
+            if let Ok(sig) = sigs.wait() {
+                match sig {
+                    Signal::SIGINT => {
+                        warn!("SIGINT!!!!!");
+                        // Here, send child processes an exit message
+                    }
+                    _ => {}
                 }
             }
-            active_kids -= 1;
+        });
+
+        let pool = CpuPool::new_num_cpus();
+        let timer = Timer::default();
+        let num_kids = self.child_records.len();
+        info!("Supervisor waiting for child processes. {} remaining.",
+              num_kids);
+        let (tx, rx) = mpsc::channel();
+        let records = self.child_records.clone();
+        let names = self.child_specs.iter().map(|s| s.id.clone()).collect::<Vec<String>>();
+        thread::spawn(move || for idx in 0..num_kids {
+            let pid = get_pid_for_idx(&records, idx);
+            let birth = records[&pid].time_started;
+            let child_name = names[records[&pid].spec_index].clone();
+            let txc = tx.clone();
+            let wait_future = pool.spawn_fn(move || {
+                info!("Waiting for {}", pid);
+                match waitpid(pid, None) {
+                    Ok(WaitStatus::Exited(_, ret)) => {
+                        let life = birth.to(PreciseTime::now())
+                            .num_seconds();
+                        info!("Status: {} exited after {}s with exit code {}.",
+                              child_name,
+                              life,
+                              ret);
+                    }
+                    _ => {
+                        warn!("Unknown action");
+                    }
+                };
+                let res: Result<i32> = Ok(pid);
+                res
+            });
+            let timeout = pool.spawn(timer.sleep(Duration::from_secs(5))
+                .then(|_| {
+                    info!("Timeout reached!");
+                    Ok(-1)
+                }));
+            let _ = txc.send(timeout.select(wait_future).map(|(res, _)| res));
+        });
+        for v in rx {
+            if let Ok(pid) = v.wait() {
+                info!("{} Exited", pid);
+                self.child_records.remove(&pid);
+            }
         }
         Ok(())
     }
@@ -184,6 +222,14 @@ impl Supervisor {
         SigSet::all().thread_set_mask()?;
         Ok(())
     }
+}
+
+fn get_pid_for_idx(records: &HashMap<i32, ChildRecord>, idx: usize) -> i32 {
+    let pids = records.iter()
+        .filter(|&(_, v)| v.spec_index == idx)
+        .map(|(k, _)| *k)
+        .collect::<Vec<i32>>();
+    pids[0]
 }
 
 #[cfg(not(target_os="linux"))]

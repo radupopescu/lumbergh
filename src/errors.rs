@@ -16,5 +16,9 @@ error_chain! {
             description("Could not initialize supervisor")
             display("Could not initialize supervisor")
         }
+        TimeoutError(t: String) {
+            description("Timeout reached.")
+            display("Timeout reached at {}", t)
+        }
     }
 }
