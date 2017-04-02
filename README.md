@@ -1,4 +1,4 @@
-# Lumbergh - a supervisor for multi-process applications
+# Lumbergh - a supervisor for multi-process applications (under development)
 
 [![Build Status](https://travis-ci.org/radupopescu/lumbergh.svg?branch=master)](https://travis-ci.org/radupopescu/lumbergh)
 
