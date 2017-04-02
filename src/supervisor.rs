@@ -1,12 +1,11 @@
 use std::collections::HashMap;
 use std::rc::Rc;
-use std::sync::mpsc;
 use std::thread;
 use std::time::Duration;
 use std::vec::Vec;
 
 
-use futures::Future;
+use futures::{Future,future};
 use futures_cpupool::CpuPool;
 #[cfg(not(target_os="linux"))]
 use nix::c_int;
@@ -165,14 +164,13 @@ impl Supervisor {
         let num_kids = self.child_records.len();
         info!("Supervisor waiting for child processes. {} remaining.",
               num_kids);
-        let (tx, rx) = mpsc::channel();
+        let mut results = Vec::new();
         let records = self.child_records.clone();
         let names = self.child_specs.iter().map(|s| s.id.clone()).collect::<Vec<String>>();
-        thread::spawn(move || for idx in 0..num_kids {
+        for idx in 0..num_kids {
             let pid = get_pid_for_idx(&records, idx);
             let birth = records[&pid].time_started;
             let child_name = names[records[&pid].spec_index].clone();
-            let txc = tx.clone();
             let wait_future = pool.spawn_fn(move || {
                 info!("Waiting for {}", pid);
                 match waitpid(pid, None) {
@@ -196,10 +194,10 @@ impl Supervisor {
                     info!("Timeout reached!");
                     Ok(-1)
                 }));
-            let _ = txc.send(timeout.select(wait_future).map(|(res, _)| res));
-        });
-        for v in rx {
-            if let Ok(pid) = v.wait() {
+            results.push(timeout.select(wait_future).map(|(res, _)| res));
+        };
+        if let Ok(results) = future::join_all(results).wait() {
+            for pid in results {
                 info!("{} Exited", pid);
                 self.child_records.remove(&pid);
             }
